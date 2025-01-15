@@ -117,19 +117,19 @@ const ContractsTable = ({ data }: { data: Supplier[] }) => {
         </ListItemIcon>
         <ListItemText>Baixar cópia do contrato</ListItemText>
       </MenuItem>,
-      <MenuItem key="add-notification" onClick={() => console.info("Delete")}>
+      <MenuItem key="edit" onClick={() => console.info("Delete")}>
         <ListItemIcon>
           <EditIcon fontSize="small" />
         </ListItemIcon>
         <ListItemText>Editar contrato</ListItemText>
       </MenuItem>,
-      <MenuItem key="add-notification" onClick={() => console.info("Delete")}>
+      <MenuItem key="check" onClick={() => console.info("Delete")}>
         <ListItemIcon>
           <CheckIcon fontSize="small" />
         </ListItemIcon>
         <ListItemText>Marcar como terminado</ListItemText>
       </MenuItem>,
-      <MenuItem key="send-email" onClick={() => console.info("Delete")}>
+      <MenuItem key="delete" onClick={() => console.info("Delete")}>
         <ListItemIcon>
           <DeleteIcon fontSize="small" />
         </ListItemIcon>

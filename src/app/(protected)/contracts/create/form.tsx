@@ -304,8 +304,8 @@ export const Form: React.FC = () => {
         helperText={errors.status}
       >
         <MenuItem value="">Selecione uma opção</MenuItem>
-        {statuses.map((status) => (
-          <MenuItem key={status} value={status}>
+        {statuses.map((status, index) => (
+          <MenuItem key={index} value={status}>
             {status}
           </MenuItem>
         ))}

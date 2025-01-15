@@ -9,10 +9,11 @@ const Layout = async ({
   children,
   params,
 }: {
-  params: { contractId: string };
+  params: Promise<{ contractId: string }>; // Updated type to reflect Promise
   children: React.ReactNode;
 }) => {
-  const data = await getDoc(doc(db, "contracts", params.contractId));
+  const { contractId } = await params;
+  const data = await getDoc(doc(db, "contracts", contractId));
 
   if (!data.exists) {
     return (
