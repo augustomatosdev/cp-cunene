@@ -5,6 +5,7 @@ import { addDoc, collection } from "firebase/firestore";
 import Link from "next/link";
 import { useState } from "react";
 import AddIcon from "@mui/icons-material/Add";
+import { toast } from "react-toastify";
 
 const Form = () => {
   const [loading, setLoading] = useState(false);
@@ -87,7 +88,7 @@ const Form = () => {
       // Add a new document in the "suppliers" collection
       await addDoc(collection(db, "suppliers"), {
         ...formData,
-        createdAt: new Date(), // Timestamp
+        createdAt: new Date().toDateString(),
       });
 
       // Reset form after successful submission
@@ -110,9 +111,11 @@ const Form = () => {
         ],
       });
 
-      alert("Fornecedor cadastrado com sucesso!");
+      toast.success("Fornecedor cadastrado com sucesso!");
     } catch (err) {
-      setError("Erro ao cadastrar o fornecedor. Por favor, tente novamente.");
+      toast.error(
+        "Erro ao cadastrar o fornecedor. Por favor, tente novamente."
+      );
     } finally {
       setLoading(false);
     }

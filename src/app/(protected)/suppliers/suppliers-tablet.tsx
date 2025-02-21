@@ -27,6 +27,7 @@ type Supplier = {
 
 //nested data is ok, see accessorKeys in ColumnDef below
 const SuppliersTable = ({ data }: { data: Supplier[] }) => {
+  console.log({ data });
   const router = useRouter();
   const columns = useMemo<MRT_ColumnDef<Supplier>[]>(
     () => [
@@ -88,19 +89,15 @@ const SuppliersTable = ({ data }: { data: Supplier[] }) => {
       <MenuItem
         key="add-contract"
         onClick={() =>
-          router.push(`/create/contract?supplierId=${row.original.id}`)
+          router.push(
+            `/contracts/create?supplierId=${row.original.id}&supplierName=${row.original.name}`
+          )
         }
       >
         <ListItemIcon>
           <DescriptionIcon fontSize="small" />
         </ListItemIcon>
         <ListItemText>Adicionar contrato</ListItemText>
-      </MenuItem>,
-      <MenuItem key="add-notification" onClick={() => console.info("Delete")}>
-        <ListItemIcon>
-          <NotificationsIcon fontSize="small" />
-        </ListItemIcon>
-        <ListItemText>Adicionar notificação</ListItemText>
       </MenuItem>,
       <MenuItem key="send-email" onClick={() => console.info("Delete")}>
         <ListItemIcon>

@@ -1,12 +1,10 @@
 "use client";
-import { Button, MenuItem, TextField } from "@mui/material";
+import { Button, TextField } from "@mui/material";
 import { useSearchParams } from "next/navigation";
 import React, { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import { styled } from "@mui/material/styles";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import Autocomplete, {
-  AutocompleteChangeReason,
-} from "@mui/material/Autocomplete";
+import Autocomplete from "@mui/material/Autocomplete";
 import { collection, addDoc, getDocs } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
@@ -24,11 +22,8 @@ interface FormData {
   reference: string;
   description: string;
   startDate: string;
-  endDate: string;
-  amount: string;
-  status: string;
   files: File[];
-  object: string;
+  title: string;
 }
 
 const statuses = ["Em andamento", "Concluido", "Cancelado"];
@@ -61,11 +56,8 @@ export const Form: React.FC = () => {
     reference: "",
     description: "",
     startDate: "",
-    endDate: "",
-    amount: "",
-    status: "",
     files: [],
-    object: "",
+    title: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -137,11 +129,6 @@ export const Form: React.FC = () => {
     if (!formData.reference) newErrors.reference = "Required";
     if (!formData.description) newErrors.description = "Required";
     if (!formData.startDate) newErrors.startDate = "Required";
-    if (!formData.endDate) newErrors.endDate = "Required";
-    if (!formData.object) newErrors.object = "Required";
-    if (!formData.amount || parseFloat(formData.amount) <= 0)
-      newErrors.amount = "Must be a positive number";
-    if (!formData.status) newErrors.status = "Required";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -163,27 +150,24 @@ export const Form: React.FC = () => {
       );
 
       // Add document to Firestore
-      const contractData = {
+      const documentData = {
         supplier: supplierName || formData.supplier?.label,
         supplierId: supplierId || formData.supplier?.id,
         reference: formData.reference,
         description: formData.description,
         startDate: formData.startDate,
-        endDate: formData.endDate,
-        amount: formData.amount,
-        status: formData.status,
-        object: formData.object,
         fileUrls, // Stores the URLs of uploaded files
         createdAt: new Date().toISOString(),
+        title: formData.title,
       };
 
-      console.log({ contractData });
+      console.log({ documentData });
 
-      if (!contractData.supplier || !contractData.supplierId) {
+      if (!documentData.supplier || !documentData.supplierId) {
         throw new Error("Supplier information is required");
       }
 
-      await addDoc(collection(db, "contracts"), contractData);
+      await addDoc(collection(db, "documents"), documentData);
 
       // Reset form after successful submission
       setFormData({
@@ -191,14 +175,11 @@ export const Form: React.FC = () => {
         reference: "",
         description: "",
         startDate: "",
-        endDate: "",
-        amount: "",
-        status: "",
         files: [],
-        object: "",
+        title: "",
       });
 
-      toast.success("Contrato enviado com sucesso!");
+      toast.success("Documento enviado com sucesso!");
     } catch (error) {
       console.error("Error submitting contract: ", error);
       toast.error(
@@ -213,7 +194,7 @@ export const Form: React.FC = () => {
       {!supplierId && (
         <>
           <p className="font-semibold text-sm text-zinc-600">
-            Selecionar fornecedor:
+            Selecionar fornecedor relacionado:
           </p>
           <Autocomplete
             disablePortal
@@ -234,11 +215,11 @@ export const Form: React.FC = () => {
         </>
       )}
       <p className="font-semibold text-sm text-zinc-600 mt-4">
-        Dados do contrato:
+        Dados do documento:
       </p>
       <TextField
         size="small"
-        label="Nº ou Referência do contrato"
+        label="Nº ou Referência do documento"
         name="reference"
         value={formData.reference}
         onChange={handleChange}
@@ -251,22 +232,20 @@ export const Form: React.FC = () => {
       />
       <TextField
         size="small"
-        label="Objecto do contrato"
-        name="object"
-        value={formData.object}
+        label="Título do documento"
+        name="title"
+        value={formData.title}
         onChange={handleChange}
         fullWidth
-        rows={2}
-        multiline
         margin="normal"
         variant="outlined"
         required
-        error={!!errors.object}
-        helperText={errors.object}
+        error={!!errors.title}
+        helperText={errors.title}
       />
       <TextField
         size="small"
-        label="Observações"
+        label="Descrição do documento"
         name="description"
         value={formData.description}
         onChange={handleChange}
@@ -281,7 +260,7 @@ export const Form: React.FC = () => {
       />
       <TextField
         size="small"
-        label="Data de inicio"
+        label="Data de emissão"
         name="startDate"
         type="date"
         value={formData.startDate}
@@ -293,55 +272,6 @@ export const Form: React.FC = () => {
         error={!!errors.startDate}
         helperText={errors.startDate}
       />
-      <TextField
-        size="small"
-        label="Data de término"
-        name="endDate"
-        type="date"
-        value={formData.endDate}
-        onChange={handleChange}
-        fullWidth
-        margin="normal"
-        InputLabelProps={{ shrink: true }}
-        required
-        error={!!errors.endDate}
-        helperText={errors.endDate}
-      />
-      <TextField
-        size="small"
-        label="Valor financeiro do contrato"
-        name="amount"
-        type="number"
-        value={formData.amount}
-        onChange={handleChange}
-        fullWidth
-        margin="normal"
-        variant="outlined"
-        required
-        error={!!errors.amount}
-        helperText={errors.amount}
-      />
-      <TextField
-        size="small"
-        select
-        label="Estado"
-        name="status"
-        value={formData.status}
-        onChange={handleChange}
-        fullWidth
-        margin="normal"
-        variant="outlined"
-        required
-        error={!!errors.status}
-        helperText={errors.status}
-      >
-        <MenuItem value="">Selecione uma opção</MenuItem>
-        {statuses.map((status, index) => (
-          <MenuItem key={index} value={status}>
-            {status}
-          </MenuItem>
-        ))}
-      </TextField>
       <div className="mt-2 flex items-center">
         <Button
           component="label"

@@ -6,7 +6,7 @@ import ContractsTable from "./contracts-table";
 
 const Page = async () => {
   const contracts: any = [];
-  const q = query(collection(db, "contracts"));
+  const q = query(collection(db, "contracts"), orderBy("createdAt", "desc"));
   const data = await getDocs(q);
   data.forEach((supplier) => {
     contracts.push({ ...supplier.data(), id: supplier.id });

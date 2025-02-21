@@ -5,7 +5,7 @@ import Instructions from "./instructions";
 const Page = () => {
   return (
     <div className="max-w-screen-lg mx-auto">
-      <h1 className="text-2xl font-semibold mb-4">Registrar novo contrato</h1>
+      <h1 className="text-2xl font-semibold mb-4">Registrar novo documento</h1>
       <div className="grid grid-cols-3 gap-8">
         <div className="col-span-2">
           <Form />

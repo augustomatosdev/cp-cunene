@@ -11,9 +11,7 @@ const Page = () => {
           <Form />
         </div>
         <div>
-          <p className="font-semibold text-sm text-zinc-600">
-            <Instructions />
-          </p>
+          <Instructions />
         </div>
       </div>
     </div>

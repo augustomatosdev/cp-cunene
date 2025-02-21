@@ -1,17 +1,26 @@
 "use client";
+import React, { useState, useEffect } from "react";
+import {
+  TextField,
+  Button,
+  Paper,
+  Box,
+  Typography,
+  Container,
+  InputAdornment,
+  IconButton,
+} from "@mui/material";
+import { signIn, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Loading } from "@/app/components/loading";
 import { firebaseErrorTranslator, signinValidator } from "@/lib/validators";
-import { Button, TextField } from "@mui/material";
-import { signIn, useSession } from "next-auth/react";
-import Link from "next/link";
-import { redirect, useRouter } from "next/navigation";
-import React, { useState, useEffect } from "react";
+import { Mail, Lock } from "lucide-react";
 
 const Page = () => {
   const router = useRouter();
-  const { data: session, status } = useSession() as any;
-  const [loading, setLoading] = useState<boolean>(false);
-  const [errors, setErrors] = useState<any>(null);
+  const { data: session, status } = useSession();
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{ [key: string]: string } | null>(null);
   const [state, setState] = useState({
     email: "",
     password: "",
@@ -33,9 +42,8 @@ const Page = () => {
 
   const handleSubmit = async () => {
     const isValid = signinValidator(state, setErrors);
-    if (!isValid) {
-      return;
-    }
+    if (!isValid) return;
+
     setLoading(true);
     try {
       const session = await signIn("credentials", {
@@ -49,90 +57,117 @@ const Page = () => {
         router.push("/");
         return;
       }
+
       if (session?.error) {
         const { field, message } = firebaseErrorTranslator(session.error);
-        setErrors(
-          () =>
-            ({
-              [field]: message,
-            } as any)
-        );
+        setErrors(() => ({ [field]: message }));
       }
     } catch (error: any) {
       const { field, message } = firebaseErrorTranslator(error.code);
-      setErrors(
-        () =>
-          ({
-            [field]: message,
-          } as any)
-      );
+      setErrors(() => ({ [field]: message }));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto min-h-screen flex flex-col justify-center items-center p-4">
-      <div className="mt-4">
-        <img
-          className="h-24"
-          src="https://govcsucp.netlify.app/static/media/logo.f46d1ad7.png"
-        />
-      </div>
-      <div className="my-4">
-        <p className="text-2xl text-center font-semibold">
-          Governo Provincial do Cunene
-        </p>
-        <p className="text-xl text-center">Sistema de Gestão de Fornecedores</p>
-      </div>
-      <div className="w-full">
-        <div className="my-4">
-          <TextField
-            value={state.email}
-            name="email"
-            onChange={handleChange}
-            type="email"
-            label="Email"
-            fullWidth
-            helperText={errors?.email}
-            error={errors?.email ? true : false}
-          />
-        </div>
-        <div className="my-4">
-          <TextField
-            value={state.password}
-            name="password"
-            onChange={handleChange}
-            type="password"
-            label="Senha"
-            fullWidth
-            helperText={errors?.password}
-            error={errors?.password ? true : false}
-          />
-        </div>
-        <div className="my-8">
-          <Button
-            onClick={handleSubmit}
-            size="large"
-            fullWidth
-            variant="contained"
-            disabled={loading}
-          >
-            {loading ? (
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 border-t-2 border-white rounded-full animate-spin"></div>
-                Entrando...
-              </div>
-            ) : (
-              "Entrar"
-            )}
-          </Button>
-        </div>
+    <div className="min-h-screen bg-gradient-to-b from-red-900 to-red-950 flex items-center justify-center p-4">
+      <Container maxWidth="sm">
+        <Paper elevation={4} className="p-8 rounded-lg">
+          <div className="flex flex-col items-center mb-8">
+            <img
+              src="https://govcsucp.netlify.app/static/media/logo.f46d1ad7.png"
+              alt="Logo"
+              className="h-32 mb-6"
+            />
+            <div className="text-center">
+              <Typography variant="h5" className="font-bold text-red-900 mb-2">
+                Governo Provincial do Cunene
+              </Typography>
+              <Typography variant="subtitle1" className="text-gray-600">
+                Sistema de Gestão de Fornecedores
+              </Typography>
+            </div>
+          </div>
 
-        <p className="text-xs text-center my-8 ">
-          Copyright © Governo Provincial do Cunene 2025.
-        </p>
-      </div>
+          <Box className="space-y-6">
+            <div className="relative">
+              <TextField
+                value={state.email}
+                name="email"
+                onChange={handleChange}
+                type="email"
+                label="Email"
+                fullWidth
+                error={!!errors?.email}
+                helperText={errors?.email}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <IconButton>
+                        <Mail className="text-gray-500" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </div>
+
+            <div className="relative">
+              <TextField
+                value={state.password}
+                name="password"
+                onChange={handleChange}
+                type="password"
+                label="Senha"
+                fullWidth
+                error={!!errors?.password}
+                helperText={errors?.password}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <IconButton>
+                        <Lock className="text-gray-500" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </div>
+
+            <Button
+              onClick={handleSubmit}
+              size="large"
+              fullWidth
+              variant="contained"
+              disabled={loading}
+              className="bg-red-900 hover:bg-red-800 mt-6 py-3 text-lg"
+              sx={{
+                backgroundColor: "#800706",
+                "&:hover": {
+                  backgroundColor: "#6a0605",
+                },
+              }}
+            >
+              {loading ? (
+                <div className="flex items-center justify-center gap-3">
+                  <div className="w-5 h-5 border-t-2 border-white rounded-full animate-spin" />
+                  <span>Entrando...</span>
+                </div>
+              ) : (
+                "Entrar"
+              )}
+            </Button>
+          </Box>
+
+          <Typography
+            variant="caption"
+            className="text-gray-500 text-center block mt-8"
+          >
+            Copyright © Governo Provincial do Cunene {new Date().getFullYear()}
+          </Typography>
+        </Paper>
+      </Container>
     </div>
   );
 };
