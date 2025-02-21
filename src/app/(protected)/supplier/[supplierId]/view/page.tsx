@@ -1,15 +1,9 @@
-import React from "react";
+import React, { ReactNode } from "react";
 import { Divider } from "@mui/material";
 import { doc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-const Page = async ({
-  params,
-  children,
-}: {
-  params: { supplierId: string };
-  children: React.ReactNode;
-}) => {
+const Page = async ({ params }: { params: { supplierId: string } }) => {
   const data = await getDoc(doc(db, "suppliers", params.supplierId));
 
   if (!data.exists) {
@@ -20,6 +14,7 @@ const Page = async ({
     );
   }
   const supplier: any = data.data();
+  console.log({ supplier });
   return (
     <div className="max-w-screen-lg mx-auto">
       <div className="border rounded-md p-6">
