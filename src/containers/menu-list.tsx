@@ -9,19 +9,22 @@ import {
   Divider,
   Typography,
   Badge,
+  Box,
 } from "@mui/material";
 import {
-  Home,
-  Store,
-  FileText,
-  Settings,
-  LogOut,
-  FolderOpen,
-  ChevronDown,
-  ChevronUp,
-  Plus,
-  Users,
-} from "lucide-react";
+  Home as HomeIcon,
+  Business as BusinessIcon,
+  Assignment as AssignmentIcon,
+  Description as DescriptionIcon,
+  Settings as SettingsIcon,
+  ExitToApp as LogOutIcon,
+  Folder as FolderIcon,
+  ExpandLess as ChevronUpIcon,
+  ExpandMore as ChevronDownIcon,
+  Add as PlusIcon,
+  People as UsersIcon,
+  HowToReg as CandidatesIcon,
+} from "@mui/icons-material";
 import Link from "next/link";
 import { collection, getDocs, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -43,35 +46,34 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   {
-    name: "Inicio",
+    name: "Início",
     url: "/",
-    icon: <Home className="h-5 w-5" />,
+    icon: <HomeIcon />,
   },
-
   {
     name: "Fornecedores",
     url: "/suppliers",
-    icon: <Store className="h-5 w-5" />,
+    icon: <BusinessIcon />,
   },
   {
     name: "Contratos",
     url: "/contracts",
-    icon: <FileText className="h-5 w-5" />,
+    icon: <AssignmentIcon />,
   },
   {
     name: "Documentos",
     url: "/documents",
-    icon: <FileText className="h-5 w-5" />,
+    icon: <DescriptionIcon />,
   },
   {
     name: "Candidaturas",
     url: "/candidates",
-    icon: <Store className="h-5 w-5" />,
+    icon: <CandidatesIcon />,
   },
   {
     name: "Utilizadores",
     url: "/users",
-    icon: <Users className="h-5 w-5" />,
+    icon: <UsersIcon />,
   },
 ];
 
@@ -120,20 +122,37 @@ export const MenuList = ({
     <ListItemButton
       component={Link}
       href={item.url}
-      className={`rounded-lg my-1 ${
-        activeItem === item.url ? "bg-red-50 text-red-900" : "hover:bg-gray-50"
-      }`}
+      sx={{
+        borderRadius: 2,
+        my: 0.5,
+        backgroundColor: activeItem === item.url ? "primary.50" : "transparent",
+        color: activeItem === item.url ? "primary.main" : "text.primary",
+        "&:hover": {
+          backgroundColor: activeItem === item.url ? "primary.100" : "grey.50",
+        },
+      }}
     >
-      <ListItemIcon className={activeItem === item.url ? "text-red-900" : ""}>
+      <ListItemIcon
+        sx={{
+          color: activeItem === item.url ? "primary.main" : "text.secondary",
+          minWidth: 40,
+        }}
+      >
         {item.icon}
       </ListItemIcon>
       <ListItemText>
-        <span className={activeItem === item.url ? "font-medium" : ""}>
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: activeItem === item.url ? 600 : 400,
+            color: activeItem === item.url ? "primary.main" : "text.primary",
+          }}
+        >
           {item.name}
-        </span>
+        </Typography>
       </ListItemText>
       {item.badge && (
-        <Badge badgeContent={item.badge} color="error" className="ml-2" />
+        <Badge badgeContent={item.badge} color="error" sx={{ ml: 1 }} />
       )}
     </ListItemButton>
   );
@@ -141,7 +160,7 @@ export const MenuList = ({
   return (
     <div className="flex flex-col h-full">
       <AddFolderDialog open={open} setOpen={setOpen} />
-      <List className="flex-1 px-2">
+      <List sx={{ flex: 1, px: 1 }}>
         {menuItems.map((item, index) => {
           if (
             item.name === "Utilizadores" &&
@@ -152,62 +171,124 @@ export const MenuList = ({
           return <MenuItem key={index} item={item} />;
         })}
 
-        <Divider />
+        <Divider sx={{ my: 2 }} />
 
+        {/* Folders Section */}
         <ListItemButton
           onClick={handleFoldersClick}
-          className={`rounded-lg my-1 ${
-            foldersOpen ? "bg-red-50 text-red-900" : "hover:bg-gray-50"
-          }`}
+          sx={{
+            borderRadius: 2,
+            my: 0.5,
+            backgroundColor: foldersOpen ? "primary.50" : "transparent",
+            color: foldersOpen ? "primary.main" : "text.primary",
+            "&:hover": {
+              backgroundColor: foldersOpen ? "primary.100" : "grey.50",
+            },
+          }}
         >
-          <ListItemIcon className={foldersOpen ? "text-red-900" : ""}>
-            <FolderOpen className="h-5 w-5" />
+          <ListItemIcon
+            sx={{
+              color: foldersOpen ? "primary.main" : "text.secondary",
+              minWidth: 40,
+            }}
+          >
+            <FolderIcon />
           </ListItemIcon>
           <ListItemText>
-            <span className={foldersOpen ? "font-medium" : ""}>Pastas</span>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: foldersOpen ? 600 : 400,
+                color: foldersOpen ? "primary.main" : "text.primary",
+              }}
+            >
+              Pastas
+            </Typography>
           </ListItemText>
           {foldersOpen ? (
-            <ChevronUp className="h-4 w-4" />
+            <ChevronUpIcon sx={{ color: "text.secondary" }} />
           ) : (
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDownIcon sx={{ color: "text.secondary" }} />
           )}
         </ListItemButton>
 
         <Collapse in={foldersOpen} timeout="auto" unmountOnExit>
-          <List component="div" className="ml-4">
+          <List component="div" sx={{ pl: 2 }}>
             {folders.map((folder) => (
               <ListItemButton
                 key={folder.id}
-                className="rounded-lg hover:bg-gray-50"
                 component={Link}
                 href={`/documents?folder=${folder.id}`}
+                sx={{
+                  borderRadius: 2,
+                  my: 0.5,
+                  "&:hover": {
+                    backgroundColor: "grey.50",
+                  },
+                }}
               >
-                <ListItemIcon className="text-sm">
-                  <FolderOpen className="h-5 w-5" />
+                <ListItemIcon sx={{ minWidth: 32 }}>
+                  <FolderIcon sx={{ fontSize: 20, color: "warning.main" }} />
                 </ListItemIcon>
-
                 <ListItemText>
-                  <div className="flex items-center justify-between text-sm">
-                    <span>{folder.name}</span>
-                  </div>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ fontSize: "0.875rem" }}>
+                      {folder.name}
+                    </Typography>
+                  </Box>
                 </ListItemText>
               </ListItemButton>
             ))}
+
+            {folders.length === 0 && (
+              <ListItem>
+                <ListItemText>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ pl: 1 }}
+                  >
+                    Nenhuma pasta criada
+                  </Typography>
+                </ListItemText>
+              </ListItem>
+            )}
           </List>
         </Collapse>
       </List>
 
-      <ListItemButton
-        onClick={() => signOut()}
-        className="m-2 rounded-lg hover:bg-red-50 text-red-900"
-      >
-        <ListItemIcon>
-          <LogOut className="h-5 w-5 text-red-900" />
-        </ListItemIcon>
-        <ListItemText>
-          <span className="font-medium">Sair</span>
-        </ListItemText>
-      </ListItemButton>
+      {/* Sign Out Button */}
+      <List sx={{ p: 1 }}>
+        <ListItemButton
+          onClick={() => signOut()}
+          sx={{
+            borderRadius: 2,
+            backgroundColor: "error.50",
+            color: "error.main",
+            "&:hover": {
+              backgroundColor: "error.100",
+            },
+          }}
+        >
+          <ListItemIcon sx={{ color: "error.main", minWidth: 40 }}>
+            <LogOutIcon />
+          </ListItemIcon>
+          <ListItemText>
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 600, color: "error.main" }}
+            >
+              Sair
+            </Typography>
+          </ListItemText>
+        </ListItemButton>
+      </List>
     </div>
   );
 };
