@@ -9,51 +9,52 @@ import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import AddIcon from "@mui/icons-material/AddBoxOutlined";
 import { IconButton } from "@mui/material";
-import { addDoc, collection } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { toast } from "react-toastify";
+import { useSession } from "next-auth/react";
 
 export function AddFolderDialog({
-  folders,
-  formData,
-  setFolders,
+  open,
+  setOpen,
 }: {
-  folders: any;
-  formData: any;
-  setFolders: any;
+  open: boolean;
+  setOpen: (open: boolean) => void;
 }) {
-  const [open, setOpen] = React.useState(false);
-  const [label, setLabel] = React.useState("");
+  const { data: session } = useSession();
+
+  const user: any = session?.user;
+
+  const [name, setName] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
   const handleAddFolder = async () => {
-    // Check if folder already exists
-    const folderExists = folders.some(
-      (folder: any) => folder.label === formData.folder?.label
-    );
-    if (folderExists) {
-      alert("Já existe uma pasta com esse nome.");
-      return;
-    }
-
-    if (!label) {
+    if (!name) {
       alert("Seleccione um nome para sua pasta.");
       return;
     }
-
     setLoading(true);
 
-    const folderRef = await addDoc(collection(db, "folders"), { label });
-
-    // Update folders state to include the new folder
-    setFolders((prevFolders: any) => [
-      ...prevFolders,
-      { label: label, id: folderRef.id },
-    ]);
-
-    setLoading(true);
-
-    alert("Pasta criada com sucesso!");
-    setOpen(false);
+    try {
+      //check if folder already exists
+      const folderRef = await getDoc(doc(db, "folders", name));
+      if (folderRef.exists()) {
+        toast.error("Já existe uma pasta com esse nome.");
+        return;
+      }
+      await addDoc(collection(db, "folders"), {
+        name,
+        createdAt: new Date(),
+        createdBy: user?.email,
+      });
+      setLoading(false);
+      toast.success("Pasta criada com sucesso!");
+      setOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao criar pasta.");
+      setLoading(false);
+    }
   };
 
   const handleClickOpen = () => {
@@ -66,9 +67,6 @@ export function AddFolderDialog({
 
   return (
     <React.Fragment>
-      <IconButton color="primary" onClick={handleClickOpen}>
-        <AddIcon fontSize="large" />
-      </IconButton>
       <Dialog open={open} onClose={handleClose}>
         <DialogTitle>Criar nova pasta</DialogTitle>
         <DialogContent>
@@ -79,8 +77,8 @@ export function AddFolderDialog({
             autoFocus
             required
             margin="dense"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             label="Nome da pasta"
             fullWidth
             variant="standard"
@@ -90,7 +88,9 @@ export function AddFolderDialog({
           <Button color="error" onClick={handleClose}>
             Cancelar
           </Button>
-          <Button onClick={handleAddFolder}>Criar pasta</Button>
+          <Button disabled={loading} onClick={handleAddFolder}>
+            {loading ? "Criando..." : "Criar pasta"}
+          </Button>
         </DialogActions>
       </Dialog>
     </React.Fragment>

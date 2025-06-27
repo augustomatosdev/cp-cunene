@@ -174,11 +174,6 @@ export const Form: React.FC = () => {
             />
           )}
         />
-        <AddFolderDialog
-          folders={folders}
-          formData={formData}
-          setFolders={setFolders}
-        />
       </div>
 
       <p className="font-semibold text-sm text-zinc-600 mt-4">

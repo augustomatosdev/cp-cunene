@@ -17,9 +17,9 @@ import {
   IconButton,
   InputAdornment,
 } from "@mui/material";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, updateDoc } from "firebase/firestore";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import BusinessIcon from "@mui/icons-material/Business";
@@ -27,7 +27,7 @@ import LocationOnIcon from "@mui/icons-material/LocationOn";
 import PeopleIcon from "@mui/icons-material/People";
 import InfoIcon from "@mui/icons-material/Info";
 import { toast } from "react-toastify";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 // Add interfaces for the form data and socio
@@ -61,10 +61,28 @@ interface FormErrors {
 const Form = () => {
   const session = useSession();
   const user = session.data?.user;
+  const { supplierId } = useParams();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [errors, setErrors] = useState<FormErrors>({});
+
+  const [supplier, setSupplier] = useState<FormData | null>(null);
+
+  useEffect(() => {
+    const fetchSupplier = async () => {
+      const docRef = doc(db, "suppliers", supplierId as string);
+      const docSnap = await getDoc(docRef);
+      setSupplier(docSnap.data() as FormData);
+    };
+    fetchSupplier();
+  }, [supplierId]);
+
+  useEffect(() => {
+    if (supplier) {
+      setFormData(supplier);
+    }
+  }, [supplier]);
 
   const [formData, setFormData] = useState<FormData>({
     name: "",
@@ -268,22 +286,23 @@ const Form = () => {
     setLoading(true);
     try {
       // Add a new document in the "suppliers" collection with server timestamp
-      await addDoc(collection(db, "suppliers"), {
+      await updateDoc(doc(db, "suppliers", supplierId as string), {
         ...formData,
         createdAt: new Date().toISOString(), // Using server timestamp for better consistency
-        createdBy: user?.email,
+        updatedAt: new Date().toISOString(),
+        updatedBy: user?.email,
       });
 
-      toast.success("Fornecedor cadastrado com sucesso!");
+      toast.success("Fornecedor actualizado com sucesso!");
 
       // Redirect to suppliers list after successful submission
       setTimeout(() => {
-        router.push("/suppliers");
+        router.push(`/supplier/${supplierId}/view`);
       }, 1500);
     } catch (err) {
       console.error("Error adding supplier:", err);
       toast.error(
-        "Erro ao cadastrar o fornecedor. Por favor, tente novamente."
+        "Erro ao actualizar o fornecedor. Por favor, tente novamente."
       );
     } finally {
       setLoading(false);

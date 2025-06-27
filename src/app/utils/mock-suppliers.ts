@@ -223,9 +223,7 @@ export const uploadSupplier = async () => {
   try {
     for (const supplier of sampleSuppliers) {
       await addDoc(suppliersCollection, supplier);
-      console.log(`Supplier ${supplier.name} added successfully`);
     }
-    console.log("All suppliers uploaded successfully!");
   } catch (error) {
     console.error("Error uploading suppliers: ", error);
   }

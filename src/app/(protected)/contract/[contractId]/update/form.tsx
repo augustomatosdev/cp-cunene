@@ -11,17 +11,36 @@ import {
   Chip,
   Alert,
   Skeleton,
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
 } from "@mui/material";
-import { useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import React, { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import { styled } from "@mui/material/styles";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import BusinessIcon from "@mui/icons-material/Business";
 import DescriptionIcon from "@mui/icons-material/Description";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
+import DeleteIcon from "@mui/icons-material/Delete";
+import DownloadIcon from "@mui/icons-material/Download";
+import EditIcon from "@mui/icons-material/Edit";
 import Autocomplete from "@mui/material/Autocomplete";
-import { collection, addDoc, getDocs, doc, getDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  updateDoc,
+} from "firebase/firestore";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import Link from "next/link";
 import { toast } from "react-toastify";
@@ -33,6 +52,11 @@ interface SupplierOption {
   id: string;
 }
 
+interface ExistingFile {
+  name: string;
+  url: string;
+}
+
 interface FormData {
   supplierId: string;
   supplierName: string;
@@ -42,8 +66,15 @@ interface FormData {
   endDate: string;
   amount: string;
   status: string;
-  files: File[];
   object: string;
+  fileUrls?: ExistingFile[];
+}
+
+interface ContractData extends FormData {
+  id: string;
+  createdAt: any;
+  updatedAt: any;
+  createdBy?: string;
 }
 
 const statuses = ["Em andamento", "Concluido", "Cancelado"];
@@ -61,10 +92,10 @@ const VisuallyHiddenInput = styled("input")({
 });
 
 export const Form: React.FC = () => {
+  const { contractId } = useParams();
+  const router = useRouter();
   const session = useSession();
   const user = session.data?.user;
-  const searchParams = useSearchParams();
-  const supplierIdFromUrl = searchParams.get("supplierId");
 
   const [formData, setFormData] = useState<FormData>({
     supplierId: "",
@@ -75,23 +106,85 @@ export const Form: React.FC = () => {
     endDate: "",
     amount: "",
     status: "",
-    files: [],
     object: "",
+    fileUrls: [],
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [selectedSupplier, setSelectedSupplier] =
     useState<SupplierOption | null>(null);
-  const [loadingSupplier, setLoadingSupplier] = useState(false);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [existingFiles, setExistingFiles] = useState<ExistingFile[]>([]);
+  const [filesToDelete, setFilesToDelete] = useState<string[]>([]);
 
+  // Fetch contract data
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchContract = async () => {
       try {
-        setLoadingSupplier(true);
+        setLoading(true);
 
-        // Always fetch all suppliers for the autocomplete
+        if (!contractId) {
+          toast.error("ID do contrato não encontrado");
+          router.push("/contracts");
+          return;
+        }
+
+        const contractDoc = await getDoc(
+          doc(db, "contracts", contractId as string)
+        );
+
+        if (!contractDoc.exists()) {
+          toast.error("Contrato não encontrado");
+          router.push("/contracts");
+          return;
+        }
+
+        const contractData: any = contractDoc.data() as ContractData;
+
+        // Set form data
+        setFormData({
+          supplierId: contractData.supplierId || "",
+          supplierName:
+            contractData.supplierName || contractData.supplier || "",
+          reference: contractData.reference || "",
+          description: contractData.description || "",
+          startDate: contractData.startDate || "",
+          endDate: contractData.endDate || "",
+          amount: contractData.amount?.toString() || "",
+          status: contractData.status || "",
+          object: contractData.object || "",
+          fileUrls: contractData.fileUrls || [],
+        });
+
+        // Set existing files
+        setExistingFiles(contractData.fileUrls || []);
+
+        // Set selected supplier
+        if (contractData.supplierId && contractData.supplierName) {
+          setSelectedSupplier({
+            id: contractData.supplierId,
+            label: contractData.supplierName || contractData.supplier || "",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching contract:", error);
+        toast.error("Erro ao carregar contrato");
+        router.push("/contracts");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContract();
+  }, [contractId, router]);
+
+  // Fetch suppliers
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
         const suppliersCollection = collection(db, "suppliers");
         const supplierDocs = await getDocs(suppliersCollection);
         const supplierList = supplierDocs.docs.map((doc) => ({
@@ -99,42 +192,14 @@ export const Form: React.FC = () => {
           id: doc.id,
         }));
         setSuppliers(supplierList);
-
-        // If supplierId exists in URL, fetch the specific supplier data
-        if (supplierIdFromUrl) {
-          const supplierDoc = await getDoc(
-            doc(db, "suppliers", supplierIdFromUrl)
-          );
-
-          if (supplierDoc.exists()) {
-            const supplierData = supplierDoc.data();
-            const preSelectedSupplier = {
-              id: supplierIdFromUrl,
-              label: supplierData.name,
-            };
-
-            // Set both the form data and selected supplier state
-            setFormData((prev) => ({
-              ...prev,
-              supplierId: supplierIdFromUrl,
-              supplierName: supplierData.name,
-            }));
-
-            setSelectedSupplier(preSelectedSupplier);
-          } else {
-            toast.error("Fornecedor não encontrado");
-          }
-        }
       } catch (error) {
+        console.error("Error fetching suppliers:", error);
         toast.error("Erro ao carregar fornecedores");
-        console.error(error);
-      } finally {
-        setLoadingSupplier(false);
       }
     };
 
-    fetchData();
-  }, [supplierIdFromUrl]);
+    fetchSuppliers();
+  }, []);
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -176,12 +241,23 @@ export const Form: React.FC = () => {
     }
   };
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleNewFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    setFormData((prevData) => ({
-      ...prevData,
-      files: files ? Array.from(files) : [],
-    }));
+    setNewFiles(files ? Array.from(files) : []);
+  };
+
+  const handleDeleteExistingFile = (fileUrl: string, fileName: string) => {
+    // Remove from existing files display
+    setExistingFiles((prev) => prev.filter((file) => file.url !== fileUrl));
+
+    // Add to deletion queue
+    setFilesToDelete((prev) => [...prev, fileUrl]);
+
+    toast.info(`${fileName} será removido ao salvar`);
+  };
+
+  const handleDeleteNewFile = (index: number) => {
+    setNewFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const validate = () => {
@@ -222,9 +298,9 @@ export const Form: React.FC = () => {
     setUploading(true);
 
     try {
-      // Upload files to Firebase Storage
-      const fileUrls = await Promise.all(
-        formData.files.map(async (file) => {
+      // Upload new files to Firebase Storage
+      const newFileUrls = await Promise.all(
+        newFiles.map(async (file) => {
           const timestamp = Date.now();
           const fileName = `${timestamp}_${file.name}`;
           const fileRef = ref(storage, `contracts/${fileName}`);
@@ -236,9 +312,26 @@ export const Form: React.FC = () => {
         })
       );
 
-      // Prepare contract data
-      const contractData = {
+      // Delete files marked for deletion
+      await Promise.all(
+        filesToDelete.map(async (fileUrl) => {
+          try {
+            const fileRef = ref(storage, fileUrl);
+            await deleteObject(fileRef);
+          } catch (error) {
+            console.warn("Error deleting file:", error);
+            // Continue even if file deletion fails
+          }
+        })
+      );
+
+      // Combine existing files (not deleted) with new files
+      const finalFileUrls = [...existingFiles, ...newFileUrls];
+
+      // Prepare updated contract data
+      const updatedContractData = {
         supplier: formData.supplierName,
+        supplierName: formData.supplierName, // Keep both for compatibility
         supplierId: formData.supplierId,
         reference: formData.reference,
         description: formData.description,
@@ -247,46 +340,31 @@ export const Form: React.FC = () => {
         amount: parseFloat(formData.amount),
         status: formData.status,
         object: formData.object,
-        fileUrls, // Stores the URLs and names of uploaded files
-        createdAt: new Date().toISOString(),
+        fileUrls: finalFileUrls,
         updatedAt: new Date().toISOString(),
-        createdBy: user?.email,
+        updatedBy: user?.email,
       };
 
-      await addDoc(collection(db, "contracts"), contractData);
+      // Update document in Firestore
+      await updateDoc(
+        doc(db, "contracts", contractId as string),
+        updatedContractData
+      );
 
-      // Reset form after successful submission (but keep supplier if from URL)
-      setFormData({
-        supplierId: supplierIdFromUrl || "",
-        supplierName: selectedSupplier?.label || "",
-        reference: "",
-        description: "",
-        startDate: "",
-        endDate: "",
-        amount: "",
-        status: "",
-        files: [],
-        object: "",
-      });
-
-      // If no URL supplier, also reset the selected supplier
-      if (!supplierIdFromUrl) {
-        setSelectedSupplier(null);
-      }
-
-      toast.success("Contrato criado com sucesso!");
+      toast.success("Contrato atualizado com sucesso!");
+      router.push("/contracts");
     } catch (error) {
-      console.error("Error submitting contract: ", error);
+      console.error("Error updating contract: ", error);
       toast.error(
-        error instanceof Error ? error.message : "Erro ao criar contrato"
+        error instanceof Error ? error.message : "Erro ao atualizar contrato"
       );
     } finally {
       setUploading(false);
     }
   };
 
-  // Show loading state while fetching supplier data
-  if (loadingSupplier && supplierIdFromUrl) {
+  // Show loading state while fetching contract data
+  if (loading) {
     return (
       <Box sx={{ maxWidth: "1000px", mx: "auto", p: { xs: 2, md: 3 } }}>
         <Paper elevation={2} sx={{ mb: 3, borderRadius: 2, p: 3 }}>
@@ -294,7 +372,7 @@ export const Form: React.FC = () => {
           <Skeleton variant="text" width={200} height={24} sx={{ mt: 1 }} />
         </Paper>
         <Paper elevation={2} sx={{ borderRadius: 2, p: 3 }}>
-          <Skeleton variant="rectangular" height={400} />
+          <Skeleton variant="rectangular" height={600} />
         </Paper>
       </Box>
     );
@@ -318,71 +396,63 @@ export const Form: React.FC = () => {
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-            <DescriptionIcon
-              sx={{ mr: 2, color: "primary.main", fontSize: 32 }}
-            />
+            <EditIcon sx={{ mr: 2, color: "primary.main", fontSize: 32 }} />
             <Box>
               <Typography variant="h4" fontWeight="bold">
-                Novo Contrato
+                Editar Contrato
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Preencha os dados do contrato abaixo
+                Atualize os dados do contrato abaixo
               </Typography>
             </Box>
           </Box>
 
-          {/* Show selected supplier if coming from URL */}
-          {supplierIdFromUrl && selectedSupplier && (
-            <Box sx={{ mt: 2 }}>
-              <Chip
-                icon={<BusinessIcon />}
-                label={`Fornecedor: ${selectedSupplier.label}`}
-                color="primary"
-                variant="outlined"
-                size="medium"
-              />
-            </Box>
-          )}
+          {/* Show contract reference */}
+          <Box sx={{ mt: 2 }}>
+            <Chip
+              icon={<DescriptionIcon />}
+              label={`Referência: ${formData.reference}`}
+              color="primary"
+              variant="outlined"
+              size="medium"
+            />
+          </Box>
         </Box>
       </Paper>
 
       {/* Form */}
       <Paper elevation={2} sx={{ borderRadius: 2, p: 3 }}>
         <form onSubmit={handleSubmit}>
-          {/* Supplier Selection - only show if not pre-selected from URL */}
-          {!supplierIdFromUrl && (
-            <>
-              <Typography
-                variant="h6"
-                gutterBottom
-                sx={{ display: "flex", alignItems: "center", mb: 2 }}
-              >
-                <BusinessIcon sx={{ mr: 1 }} />
-                Fornecedor
-              </Typography>
-              <Autocomplete
-                disablePortal
-                size="small"
-                options={suppliers}
-                value={selectedSupplier}
-                onChange={handleSupplierChange}
-                getOptionLabel={(option) => option.label}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    margin="normal"
-                    label="Nome da empresa ou designação comercial"
-                    error={!!errors.supplier}
-                    helperText={errors.supplier}
-                    required
-                  />
-                )}
-                sx={{ mb: 3 }}
+          {/* Supplier Selection */}
+          <Typography
+            variant="h6"
+            gutterBottom
+            sx={{ display: "flex", alignItems: "center", mb: 2 }}
+          >
+            <BusinessIcon sx={{ mr: 1 }} />
+            Fornecedor
+          </Typography>
+          <Autocomplete
+            disablePortal
+            size="small"
+            options={suppliers}
+            value={selectedSupplier}
+            onChange={handleSupplierChange}
+            getOptionLabel={(option) => option.label}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                margin="normal"
+                label="Nome da empresa ou designação comercial"
+                error={!!errors.supplier}
+                helperText={errors.supplier}
+                required
               />
-              <Divider sx={{ my: 3 }} />
-            </>
-          )}
+            )}
+            sx={{ mb: 3 }}
+          />
+          <Divider sx={{ my: 3 }} />
 
           {/* Contract Data */}
           <Typography
@@ -521,7 +591,7 @@ export const Form: React.FC = () => {
 
           <Divider sx={{ my: 3 }} />
 
-          {/* File Upload */}
+          {/* File Management */}
           <Typography
             variant="h6"
             gutterBottom
@@ -531,6 +601,46 @@ export const Form: React.FC = () => {
             Anexos
           </Typography>
 
+          {/* Existing Files */}
+          {existingFiles.length > 0 && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Arquivos existentes:
+              </Typography>
+              <List dense>
+                {existingFiles.map((file, index) => (
+                  <ListItem key={index} divider>
+                    <ListItemText
+                      primary={file.name}
+                      secondary="Arquivo existente"
+                    />
+                    <ListItemSecondaryAction>
+                      <IconButton
+                        edge="end"
+                        aria-label="download"
+                        onClick={() => window.open(file.url, "_blank")}
+                        sx={{ mr: 1 }}
+                      >
+                        <DownloadIcon />
+                      </IconButton>
+                      <IconButton
+                        edge="end"
+                        aria-label="delete"
+                        onClick={() =>
+                          handleDeleteExistingFile(file.url, file.name)
+                        }
+                        color="error"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
+
+          {/* Add New Files */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
             <Button
               component="label"
@@ -538,17 +648,17 @@ export const Form: React.FC = () => {
               startIcon={<CloudUploadIcon />}
               size="medium"
             >
-              Anexar ficheiros
+              Adicionar novos ficheiros
               <VisuallyHiddenInput
                 type="file"
-                onChange={handleFileChange}
+                onChange={handleNewFileChange}
                 multiple
                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
               />
             </Button>
-            {formData.files.length > 0 && (
+            {newFiles.length > 0 && (
               <Chip
-                label={`${formData.files.length} ficheiro(s) selecionado(s)`}
+                label={`${newFiles.length} novo(s) ficheiro(s) selecionado(s)`}
                 color="success"
                 variant="outlined"
                 size="small"
@@ -556,21 +666,32 @@ export const Form: React.FC = () => {
             )}
           </Box>
 
-          {/* Show selected files */}
-          {formData.files.length > 0 && (
+          {/* Show new files to be uploaded */}
+          {newFiles.length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Ficheiros selecionados:
+                Novos ficheiros a serem adicionados:
               </Typography>
-              {formData.files.map((file, index) => (
-                <Chip
-                  key={index}
-                  label={file.name}
-                  variant="outlined"
-                  size="small"
-                  sx={{ mr: 1, mb: 1 }}
-                />
-              ))}
+              <List dense>
+                {newFiles.map((file, index) => (
+                  <ListItem key={index} divider>
+                    <ListItemText
+                      primary={file.name}
+                      secondary="Novo arquivo"
+                    />
+                    <ListItemSecondaryAction>
+                      <IconButton
+                        edge="end"
+                        aria-label="delete"
+                        onClick={() => handleDeleteNewFile(index)}
+                        color="error"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))}
+              </List>
             </Box>
           )}
 
@@ -594,7 +715,7 @@ export const Form: React.FC = () => {
               size="large"
               disabled={uploading}
             >
-              {uploading ? "Criando contrato..." : "Criar Contrato"}
+              {uploading ? "Atualizando contrato..." : "Atualizar Contrato"}
             </Button>
           </Box>
         </form>

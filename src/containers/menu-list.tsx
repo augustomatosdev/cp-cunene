@@ -20,14 +20,16 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { collection, getDocs, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
+import { AddFolderDialog } from "@/app/components/add-folder-dialog";
 
 interface FolderOption {
-  label: string;
+  name: string;
   id: string;
   documentsCount?: number;
 }
@@ -45,6 +47,7 @@ const menuItems: MenuItem[] = [
     url: "/",
     icon: <Home className="h-5 w-5" />,
   },
+
   {
     name: "Fornecedores",
     url: "/suppliers",
@@ -61,13 +64,27 @@ const menuItems: MenuItem[] = [
     icon: <FileText className="h-5 w-5" />,
   },
   {
-    name: "Definições",
-    url: "/",
-    icon: <Settings className="h-5 w-5" />,
+    name: "Candidaturas",
+    url: "/candidates",
+    icon: <Store className="h-5 w-5" />,
+  },
+  {
+    name: "Utilizadores",
+    url: "/users",
+    icon: <Users className="h-5 w-5" />,
   },
 ];
 
-export const MenuList = () => {
+export const MenuList = ({
+  open,
+  setOpen,
+}: {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}) => {
+  const { data: session } = useSession();
+  const user = session?.user;
+
   const [foldersOpen, setFoldersOpen] = useState(false);
   const [folders, setFolders] = useState<FolderOption[]>([]);
   const [activeItem, setActiveItem] = useState("/");
@@ -82,7 +99,7 @@ export const MenuList = () => {
       (snapshot) => {
         const folderList = snapshot.docs.map((doc) => ({
           id: doc.id,
-          label: doc.data().label,
+          name: doc.data().name,
           documentsCount: doc.data().documentsCount || 0,
         }));
         setFolders(folderList);
@@ -123,10 +140,17 @@ export const MenuList = () => {
 
   return (
     <div className="flex flex-col h-full">
+      <AddFolderDialog open={open} setOpen={setOpen} />
       <List className="flex-1 px-2">
-        {menuItems.map((item, index) => (
-          <MenuItem key={index} item={item} />
-        ))}
+        {menuItems.map((item, index) => {
+          if (
+            item.name === "Utilizadores" &&
+            user?.email !== "admin@dcpcunene.ao"
+          ) {
+            return null;
+          }
+          return <MenuItem key={index} item={item} />;
+        })}
 
         <Divider />
 
@@ -150,18 +174,21 @@ export const MenuList = () => {
         </ListItemButton>
 
         <Collapse in={foldersOpen} timeout="auto" unmountOnExit>
-          <List component="div" className="pl-3">
+          <List component="div" className="ml-4">
             {folders.map((folder) => (
               <ListItemButton
                 key={folder.id}
-                className="rounded-lg my-1 hover:bg-gray-50"
+                className="rounded-lg hover:bg-gray-50"
+                component={Link}
+                href={`/documents?folder=${folder.id}`}
               >
-                <ListItemIcon>
+                <ListItemIcon className="text-sm">
                   <FolderOpen className="h-5 w-5" />
                 </ListItemIcon>
+
                 <ListItemText>
-                  <div className="flex items-center justify-between">
-                    <span>{folder.label}</span>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>{folder.name}</span>
                   </div>
                 </ListItemText>
               </ListItemButton>

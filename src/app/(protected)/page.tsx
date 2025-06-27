@@ -260,7 +260,11 @@ const Dashboard = () => {
           <Paper className="p-4">
             <div className="flex justify-between items-center mb-4">
               <Typography variant="h6">Contratos Recentes</Typography>
-              <Button endIcon={<ChevronRight className="h-4 w-4" />}>
+              <Button
+                endIcon={<ChevronRight className="h-4 w-4" />}
+                LinkComponent={Link}
+                href="/contracts"
+              >
                 Ver todos
               </Button>
             </div>

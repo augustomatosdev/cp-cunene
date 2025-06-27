@@ -12,7 +12,7 @@ import {
   Skeleton,
   MenuItem,
 } from "@mui/material";
-import { useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import React, { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import { styled } from "@mui/material/styles";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
@@ -21,9 +21,21 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import FolderIcon from "@mui/icons-material/Folder";
 import ApartmentIcon from "@mui/icons-material/Apartment";
+import DeleteIcon from "@mui/icons-material/Delete";
 import Autocomplete from "@mui/material/Autocomplete";
-import { collection, addDoc, getDocs, doc, getDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  updateDoc,
+} from "firebase/firestore";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import Link from "next/link";
 import { toast } from "react-toastify";
@@ -40,6 +52,11 @@ interface FolderOption {
   id: string;
 }
 
+interface ExistingFile {
+  name: string;
+  url: string;
+}
+
 interface FormData {
   supplierId: string;
   supplierName: string;
@@ -51,6 +68,7 @@ interface FormData {
   folderId: string;
   folderName: string;
   office: string;
+  existingFiles: ExistingFile[];
 }
 
 const VisuallyHiddenInput = styled("input")({
@@ -66,10 +84,11 @@ const VisuallyHiddenInput = styled("input")({
 });
 
 export const Form: React.FC = () => {
+  const params = useParams();
+  const router = useRouter();
+  const documentId = params.documentId as string;
   const { data: session } = useSession();
   const user: any = session?.user;
-  const searchParams = useSearchParams();
-  const supplierIdFromUrl = searchParams.get("supplierId");
 
   const [formData, setFormData] = useState<FormData>({
     supplierId: "",
@@ -82,6 +101,7 @@ export const Form: React.FC = () => {
     folderId: "",
     folderName: "",
     office: "",
+    existingFiles: [],
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -94,11 +114,21 @@ export const Form: React.FC = () => {
     null
   );
   const [loadingData, setLoadingData] = useState(false);
+  const [filesToDelete, setFilesToDelete] = useState<ExistingFile[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoadingData(true);
+
+        // Fetch document data
+        const documentDoc = await getDoc(doc(db, "documents", documentId));
+        if (!documentDoc.exists()) {
+          toast.error("Documento não encontrado");
+          return;
+        }
+
+        const documentData = documentDoc.data();
 
         // Fetch all suppliers for the autocomplete
         const suppliersCollection = collection(db, "suppliers");
@@ -118,41 +148,50 @@ export const Form: React.FC = () => {
         }));
         setFolders(folderList);
 
-        // If supplierId exists in URL, fetch the specific supplier data
-        if (supplierIdFromUrl) {
-          const supplierDoc = await getDoc(
-            doc(db, "suppliers", supplierIdFromUrl)
-          );
+        // Set form data from document
+        setFormData({
+          supplierId: documentData.supplierId || "",
+          supplierName: documentData.supplier || "",
+          reference: documentData.reference || "",
+          description: documentData.description || "",
+          startDate: documentData.startDate || "",
+          files: [],
+          title: documentData.title || "",
+          folderId: documentData.folderId || "",
+          folderName: documentData.folder || "",
+          office: documentData.office || "",
+          existingFiles: documentData.fileUrls || [],
+        });
 
-          if (supplierDoc.exists()) {
-            const supplierData = supplierDoc.data();
-            const preSelectedSupplier = {
-              id: supplierIdFromUrl,
-              label: supplierData.name,
-            };
+        // Set selected supplier if exists
+        if (documentData.supplierId && documentData.supplier) {
+          const supplier = {
+            id: documentData.supplierId,
+            label: documentData.supplier,
+          };
+          setSelectedSupplier(supplier);
+        }
 
-            // Set both the form data and selected supplier state
-            setFormData((prev) => ({
-              ...prev,
-              supplierId: supplierIdFromUrl,
-              supplierName: supplierData.name,
-            }));
-
-            setSelectedSupplier(preSelectedSupplier);
-          } else {
-            toast.error("Fornecedor não encontrado");
-          }
+        // Set selected folder if exists
+        if (documentData.folderId && documentData.folder) {
+          const folder = {
+            id: documentData.folderId,
+            label: documentData.folder,
+          };
+          setSelectedFolder(folder);
         }
       } catch (error) {
-        toast.error("Erro ao carregar dados");
+        toast.error("Erro ao carregar dados do documento");
         console.error(error);
       } finally {
         setLoadingData(false);
       }
     };
 
-    fetchData();
-  }, [supplierIdFromUrl]);
+    if (documentId) {
+      fetchData();
+    }
+  }, [documentId]);
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -232,6 +271,19 @@ export const Form: React.FC = () => {
     }
   };
 
+  const handleRemoveExistingFile = (fileToRemove: ExistingFile) => {
+    // Add to files to delete
+    setFilesToDelete((prev) => [...prev, fileToRemove]);
+
+    // Remove from existing files
+    setFormData((prev) => ({
+      ...prev,
+      existingFiles: prev.existingFiles.filter(
+        (file) => file.url !== fileToRemove.url
+      ),
+    }));
+  };
+
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
@@ -241,13 +293,10 @@ export const Form: React.FC = () => {
     if (!formData.description) newErrors.description = "Campo obrigatório";
     if (!formData.startDate) newErrors.startDate = "Campo obrigatório";
 
-    // Validate that at least one file is uploaded
-    if (formData.files.length === 0) {
-      newErrors.files = "Por favor anexe pelo menos um ficheiro";
+    // Validate that at least one file exists (existing or new)
+    if (formData.existingFiles.length === 0 && formData.files.length === 0) {
+      newErrors.files = "Por favor mantenha ou adicione pelo menos um ficheiro";
     }
-
-    // Note: Supplier is now optional, so we don't validate it
-    // Note: Folder is also optional based on the UI
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -260,8 +309,20 @@ export const Form: React.FC = () => {
     setUploading(true);
 
     try {
-      // Upload files to Firebase Storage
-      const fileUrls = await Promise.all(
+      // Delete files marked for deletion
+      await Promise.all(
+        filesToDelete.map(async (file) => {
+          try {
+            const fileRef = ref(storage, file.url);
+            await deleteObject(fileRef);
+          } catch (error) {
+            console.warn("Error deleting file:", error);
+          }
+        })
+      );
+
+      // Upload new files to Firebase Storage
+      const newFileUrls = await Promise.all(
         formData.files.map(async (file) => {
           const timestamp = Date.now();
           const fileName = `${timestamp}_${file.name}`;
@@ -274,8 +335,11 @@ export const Form: React.FC = () => {
         })
       );
 
-      // Prepare document data
-      const documentData = {
+      // Combine existing files (not deleted) with new files
+      const allFileUrls = [...formData.existingFiles, ...newFileUrls];
+
+      // Prepare document data for update
+      const updateData = {
         // Supplier info (optional)
         supplier: formData.supplierName || null,
         supplierId: formData.supplierId || null,
@@ -292,41 +356,21 @@ export const Form: React.FC = () => {
         title: formData.title,
         description: formData.description,
         startDate: formData.startDate,
-        fileUrls, // Stores the URLs and names of uploaded files
-        createdBy: user?.email,
+        fileUrls: allFileUrls, // Updated file list
 
-        // Timestamps
-        createdAt: new Date().toISOString(),
+        // Update metadata
+        updatedBy: user?.email,
         updatedAt: new Date().toISOString(),
       };
 
-      await addDoc(collection(db, "documents"), documentData);
+      await updateDoc(doc(db, "documents", documentId), updateData);
 
-      // Reset form after successful submission (but keep supplier if from URL)
-      setFormData({
-        supplierId: supplierIdFromUrl || "",
-        supplierName: selectedSupplier?.label || "",
-        reference: "",
-        title: "",
-        description: "",
-        startDate: "",
-        files: [],
-        folderId: "",
-        folderName: "",
-        office: "",
-      });
-
-      // Reset selections if no URL supplier
-      if (!supplierIdFromUrl) {
-        setSelectedSupplier(null);
-      }
-      setSelectedFolder(null);
-
-      toast.success("Documento criado com sucesso!");
+      toast.success("Documento actualizado com sucesso!");
+      router.push(`/documents`);
     } catch (error) {
-      console.error("Error submitting document: ", error);
+      console.error("Error updating document:", error);
       toast.error(
-        error instanceof Error ? error.message : "Erro ao criar documento"
+        error instanceof Error ? error.message : "Erro ao actualizar documento"
       );
     } finally {
       setUploading(false);
@@ -371,16 +415,16 @@ export const Form: React.FC = () => {
             />
             <Box>
               <Typography variant="h4" fontWeight="bold">
-                Novo Documento
+                Actualizar Documento
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Preencha os dados do documento abaixo
+                Modifique os dados do documento abaixo
               </Typography>
             </Box>
           </Box>
 
-          {/* Show selected supplier if coming from URL */}
-          {supplierIdFromUrl && selectedSupplier && (
+          {/* Show selected supplier if exists */}
+          {selectedSupplier && (
             <Box sx={{ mt: 2 }}>
               <Chip
                 icon={<BusinessIcon />}
@@ -498,40 +542,35 @@ export const Form: React.FC = () => {
           />
 
           <Grid container spacing={2}>
-            {/* Supplier Selection - always show but optional */}
-            {!supplierIdFromUrl && (
-              <Grid item xs={12} md={6}>
-                <Typography
-                  variant="subtitle1"
-                  gutterBottom
-                  sx={{ display: "flex", alignItems: "center", mt: 2, mb: 1 }}
-                >
-                  <BusinessIcon sx={{ mr: 1, fontSize: 20 }} />
-                  Fornecedor (Opcional)
-                </Typography>
-                <Autocomplete
-                  disablePortal
-                  size="small"
-                  options={suppliers}
-                  value={selectedSupplier}
-                  onChange={handleSupplierChange}
-                  getOptionLabel={(option) => option.label}
-                  isOptionEqualToValue={(option, value) =>
-                    option.id === value.id
-                  }
-                  disabled={!!supplierIdFromUrl} // Disable if supplier is from URL
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Nome da empresa"
-                      error={!!errors.supplier}
-                      helperText={errors.supplier}
-                      placeholder="Selecione um fornecedor..."
-                    />
-                  )}
-                />
-              </Grid>
-            )}
+            {/* Supplier Selection */}
+            <Grid item xs={12} md={6}>
+              <Typography
+                variant="subtitle1"
+                gutterBottom
+                sx={{ display: "flex", alignItems: "center", mt: 2, mb: 1 }}
+              >
+                <BusinessIcon sx={{ mr: 1, fontSize: 20 }} />
+                Fornecedor (Opcional)
+              </Typography>
+              <Autocomplete
+                disablePortal
+                size="small"
+                options={suppliers}
+                value={selectedSupplier}
+                onChange={handleSupplierChange}
+                getOptionLabel={(option) => option.label}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Nome da empresa"
+                    error={!!errors.supplier}
+                    helperText={errors.supplier}
+                    placeholder="Selecione um fornecedor..."
+                  />
+                )}
+              />
+            </Grid>
 
             {/* Folder Selection */}
             <Grid item xs={12} md={6}>
@@ -566,16 +605,39 @@ export const Form: React.FC = () => {
 
           <Divider sx={{ my: 3 }} />
 
-          {/* File Upload */}
+          {/* File Management */}
           <Typography
             variant="h6"
             gutterBottom
             sx={{ display: "flex", alignItems: "center", mb: 2 }}
           >
             <AttachFileIcon sx={{ mr: 1 }} />
-            Anexos
+            Gestão de Anexos
           </Typography>
 
+          {/* Existing Files */}
+          {formData.existingFiles.length > 0 && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Ficheiros Actuais:
+              </Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                {formData.existingFiles.map((file, index) => (
+                  <Chip
+                    key={index}
+                    label={file.name}
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    onDelete={() => handleRemoveExistingFile(file)}
+                    deleteIcon={<DeleteIcon />}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+
+          {/* Add New Files */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
             <Button
               component="label"
@@ -584,7 +646,7 @@ export const Form: React.FC = () => {
               size="medium"
               color={errors.files ? "error" : "primary"}
             >
-              Anexar ficheiros
+              Adicionar novos ficheiros
               <VisuallyHiddenInput
                 type="file"
                 onChange={handleFileChange}
@@ -594,7 +656,7 @@ export const Form: React.FC = () => {
             </Button>
             {formData.files.length > 0 && (
               <Chip
-                label={`${formData.files.length} ficheiro(s) selecionado(s)`}
+                label={`${formData.files.length} novo(s) ficheiro(s) selecionado(s)`}
                 color="success"
                 variant="outlined"
                 size="small"
@@ -609,17 +671,18 @@ export const Form: React.FC = () => {
             </Alert>
           )}
 
-          {/* Show selected files */}
+          {/* Show new files to be added */}
           {formData.files.length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Ficheiros selecionados:
+                Novos ficheiros a adicionar:
               </Typography>
               {formData.files.map((file, index) => (
                 <Chip
                   key={index}
                   label={file.name}
                   variant="outlined"
+                  color="success"
                   size="small"
                   sx={{ mr: 1, mb: 1 }}
                 />
@@ -647,7 +710,7 @@ export const Form: React.FC = () => {
               size="large"
               disabled={uploading}
             >
-              {uploading ? "Criando documento..." : "Criar Documento"}
+              {uploading ? "Actualizando documento..." : "Actualizar Documento"}
             </Button>
           </Box>
         </form>

@@ -85,6 +85,7 @@ export default function ThemeContainer({
 }) {
   const theme = useTheme();
   const [open, setOpen] = React.useState(false);
+  const [openAddFolderDialog, setOpenAddFolderDialog] = React.useState(false);
 
   const handleDrawerOpen = () => {
     setOpen(true);
@@ -141,10 +142,15 @@ export default function ThemeContainer({
           </IconButton>
         </DrawerHeader>
         <Divider />
-        <MenuList />
+        <MenuList open={openAddFolderDialog} setOpen={setOpenAddFolderDialog} />
         <Divider />
         <ListItem>
-          <Button startIcon={<AddIcon />}>Adicionar pasta</Button>
+          <Button
+            onClick={() => setOpenAddFolderDialog(true)}
+            startIcon={<AddIcon />}
+          >
+            Adicionar pasta
+          </Button>
         </ListItem>
       </Drawer>
       <Main open={open}>
