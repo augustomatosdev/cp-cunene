@@ -27,6 +27,12 @@ import LocalPhoneIcon from "@mui/icons-material/LocalPhone";
 import BusinessIcon from "@mui/icons-material/Business";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import DeleteIcon from "@mui/icons-material/Delete";
+import { toast } from "react-toastify";
+import { deleteDoc } from "firebase/firestore";
+import { doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { useQueryClient } from "@tanstack/react-query";
 
 type Supplier = {
   name: string;
@@ -44,6 +50,7 @@ type Supplier = {
 
 const SuppliersTable = ({ data }: { data: Supplier[] }) => {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const theme = useTheme();
   const [supliersWithContracts, setSuppliersWithContracts] = useState<string[]>(
     []
@@ -275,10 +282,9 @@ const SuppliersTable = ({ data }: { data: Supplier[] }) => {
       <MenuItem
         key="view"
         onClick={() => router.push(`/supplier/${row.original.id}/view`)}
-        sx={{ color: theme.palette.info.main }}
       >
         <ListItemIcon>
-          <VisibilityIcon fontSize="small" color="info" />
+          <VisibilityIcon fontSize="small" />
         </ListItemIcon>
         <ListItemText>Visualizar</ListItemText>
       </MenuItem>,
@@ -289,32 +295,42 @@ const SuppliersTable = ({ data }: { data: Supplier[] }) => {
             `/contracts/create?supplierId=${row.original.id}&supplierName=${row.original.name}`
           )
         }
-        sx={{ color: theme.palette.primary.main }}
       >
         <ListItemIcon>
-          <DescriptionIcon fontSize="small" color="primary" />
+          <DescriptionIcon fontSize="small" />
         </ListItemIcon>
         <ListItemText>Adicionar contrato</ListItemText>
       </MenuItem>,
       <MenuItem
         key="view-contracts"
         onClick={() => router.push(`/contracts?supplierId=${row.original.id}`)}
-        sx={{ color: theme.palette.secondary.main }}
       >
         <ListItemIcon>
-          <AssignmentIcon fontSize="small" color="secondary" />
+          <AssignmentIcon fontSize="small" />
         </ListItemIcon>
         <ListItemText>Ver contratos</ListItemText>
       </MenuItem>,
       <MenuItem
         key="send-email"
         onClick={() => window.open(`mailto:${row.original.email}`)}
-        sx={{ color: theme.palette.success.main }}
       >
         <ListItemIcon>
-          <EmailIcon fontSize="small" color="success" />
+          <EmailIcon fontSize="small" />
         </ListItemIcon>
         <ListItemText>Enviar email</ListItemText>
+      </MenuItem>,
+      <MenuItem
+        key="delete"
+        onClick={async () => {
+          await deleteDoc(doc(db, "suppliers", row.original.id));
+          toast.success("Fornecedor eliminado com sucesso");
+          queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+        }}
+      >
+        <ListItemIcon>
+          <DeleteIcon fontSize="small" />
+        </ListItemIcon>
+        <ListItemText> Eliminar</ListItemText>
       </MenuItem>,
     ],
   });

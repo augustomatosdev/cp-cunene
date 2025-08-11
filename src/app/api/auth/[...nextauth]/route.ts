@@ -1,6 +1,14 @@
 import { auth, db } from "@/lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  QueryDocumentSnapshot,
+  where,
+} from "firebase/firestore";
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
@@ -42,9 +50,18 @@ const handler = NextAuth({
     },
     async session({ session, token }: any) {
       if (token.uid) {
-        const userDoc = await getDoc(doc(db, "users", token.uid));
-        if (userDoc.exists()) {
-          session.user = userDoc.data();
+        const userDoc = await getDocs(
+          query(collection(db, "users"), where("email", "==", token.email))
+        );
+
+        const userData = {
+          name: userDoc.docs[0].data().name,
+          role: userDoc.docs[0].data().role,
+          email: userDoc.docs[0].data().email,
+        };
+
+        if (userDoc.docs.length > 0) {
+          session.user = userData;
           session.user.id = token.uid;
         }
       }

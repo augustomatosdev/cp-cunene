@@ -1,7 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import React from "react";
 import { AddContract } from "./add-document";
 import ContractsTable from "./documents-table";
 import { useSearchParams } from "next/navigation";
@@ -18,85 +16,69 @@ import FolderIcon from "@mui/icons-material/Folder";
 import DescriptionIcon from "@mui/icons-material/Description";
 import HomeIcon from "@mui/icons-material/Home";
 import Link from "next/link";
+import { useDocuments, getDocumentsStats } from "@/hooks/useDocuments";
+
+// Loading state component
+const LoadingState = ({
+  folderId,
+  folderName,
+}: {
+  folderId?: string | null;
+  folderName?: string | null;
+}) => (
+  <Box sx={{ maxWidth: "1400px", margin: "0 auto", p: 2 }}>
+    {/* Breadcrumbs skeleton - only show if we have folder info */}
+    {folderId && folderName && (
+      <Skeleton variant="text" width={400} height={24} sx={{ mb: 3 }} />
+    )}
+
+    {/* Header skeleton */}
+    <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+      <Box>
+        <Skeleton variant="text" width={300} height={48} />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: 2 }}>
+          <Skeleton variant="text" width={200} height={20} />
+          {folderId && folderName && (
+            <Skeleton variant="rounded" width={120} height={24} />
+          )}
+        </Box>
+      </Box>
+      <Skeleton variant="rectangular" width={150} height={40} />
+    </Box>
+
+    {/* Table skeleton */}
+    <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+      <CircularProgress size={60} />
+    </Box>
+  </Box>
+);
 
 const Page = () => {
   const searchParams = useSearchParams();
   const folderId = searchParams.get("folder");
   const folderName = searchParams.get("folderName");
 
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: documents = [],
+    isLoading,
+    isError,
+    error,
+  } = useDocuments(folderId);
 
-  useEffect(() => {
-    const fetchDocuments = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        let q;
-
-        if (folderId) {
-          // Filter by folder if folderId is provided
-          q = query(
-            collection(db, "documents"),
-            where("folderId", "==", folderId),
-            orderBy("createdAt", "desc")
-          );
-        } else {
-          // Get all documents if no folder filter
-          q = query(collection(db, "documents"), orderBy("createdAt", "desc"));
-        }
-
-        const data = await getDocs(q);
-        const documentsData: any[] = [];
-
-        data.forEach((document) => {
-          documentsData.push({
-            ...document.data(),
-            id: document.id,
-          });
-        });
-
-        setDocuments(documentsData);
-      } catch (err) {
-        console.error("Error fetching documents:", err);
-        setError("Erro ao carregar documentos. Tente novamente.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDocuments();
-  }, [folderId]); // Re-fetch when folderId changes
+  // Get document stats
+  const stats = getDocumentsStats(documents);
 
   // Loading state
-  if (loading) {
-    return (
-      <Box sx={{ maxWidth: "1400px", margin: "0 auto", p: 2 }}>
-        {/* Header skeleton */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
-          <Skeleton variant="text" width={300} height={40} />
-          <Skeleton variant="rectangular" width={150} height={40} />
-        </Box>
-
-        {/* Breadcrumbs skeleton */}
-        <Skeleton variant="text" width={400} height={24} sx={{ mb: 2 }} />
-
-        {/* Table skeleton */}
-        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-          <CircularProgress size={60} />
-        </Box>
-      </Box>
-    );
+  if (isLoading) {
+    return <LoadingState folderId={folderId} folderName={folderName} />;
   }
 
   // Error state
-  if (error) {
+  if (isError) {
     return (
       <Box sx={{ maxWidth: "1400px", margin: "0 auto", p: 2 }}>
         <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
+          Erro ao carregar documentos: {error?.message || "Erro desconhecido"}
         </Alert>
         <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
           <Typography variant="h4" fontWeight="bold">
@@ -210,6 +192,25 @@ const Page = () => {
                 size="small"
               />
             )}
+
+            {/* Additional stats chips - only show when not filtering by folder */}
+            {!folderId && stats.uniqueFoldersCount > 0 && (
+              <>
+                <Chip
+                  icon={<FolderIcon />}
+                  label={`${stats.uniqueFoldersCount} pasta(s)`}
+                  color="secondary"
+                  variant="outlined"
+                  size="small"
+                />
+                <Chip
+                  label={`${stats.uniqueSuppliersCount} fornecedor(es)`}
+                  color="info"
+                  variant="outlined"
+                  size="small"
+                />
+              </>
+            )}
           </Box>
         </Box>
 
@@ -227,7 +228,7 @@ const Page = () => {
 
       {/* Documents Table */}
       <Box sx={{ mb: 4 }}>
-        <ContractsTable data={documents} />
+        <ContractsTable data={documents as any} />
       </Box>
     </Box>
   );

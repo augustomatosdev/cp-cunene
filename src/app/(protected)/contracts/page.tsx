@@ -1,7 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import React from "react";
 import {
   Box,
   Typography,
@@ -25,213 +23,102 @@ import EuroIcon from "@mui/icons-material/Euro";
 import Link from "next/link";
 import ContractsTable from "./contracts-table";
 import { AddContract } from "./add-contract";
+import {
+  useContracts,
+  getContractStats,
+  formatCurrency,
+  Contract,
+} from "@/hooks/useContracts";
 
-// Define contract type
-interface Contract {
-  id: string;
-  supplier: string;
-  supplierId: string;
-  reference: string;
-  description: string;
-  startDate: string;
-  endDate: string;
-  amount: number;
-  status: string;
-  object: string;
-  fileUrls?: Array<{ name: string; url: string }>;
-  createdAt: any;
-  updatedAt: any;
-}
+// Loading skeleton for stats cards
+const StatsCardSkeleton = () => (
+  <Card
+    elevation={2}
+    sx={{
+      borderRadius: 2,
+      height: "100%",
+    }}
+  >
+    <CardContent sx={{ textAlign: "center", p: 2 }}>
+      <Skeleton
+        variant="circular"
+        width={40}
+        height={40}
+        sx={{ mx: "auto", mb: 1 }}
+      />
+      <Skeleton variant="text" width={60} height={40} sx={{ mx: "auto" }} />
+      <Skeleton variant="text" width="80%" height={20} sx={{ mx: "auto" }} />
+    </CardContent>
+  </Card>
+);
 
-// Utility to get contract stats
-const getContractStats = (contracts: Contract[]) => {
-  const stats = {
-    total: contracts.length,
-    emAndamento: 0,
-    concluido: 0,
-    cancelado: 0,
-    totalValue: 0,
-    activeContracts: 0,
-    uniqueSuppliers: new Set(),
-  };
+// Full loading state component
+const LoadingState = () => (
+  <Box sx={{ maxWidth: "1400px", margin: "0 auto", p: 2 }}>
+    {/* Breadcrumbs skeleton */}
+    <Skeleton variant="text" width={300} height={32} sx={{ mb: 3 }} />
 
-  const currentDate = new Date();
+    {/* Header skeleton */}
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        mb: 3,
+      }}
+    >
+      <Skeleton variant="text" width={200} height={48} />
+      <Skeleton variant="rectangular" width={150} height={40} />
+    </Box>
 
-  contracts.forEach((contract: Contract) => {
-    // Count by status
-    if (contract.status === "Em andamento") stats.emAndamento++;
-    else if (contract.status === "Concluido") stats.concluido++;
-    else if (contract.status === "Cancelado") stats.cancelado++;
+    {/* Additional stats skeleton */}
+    <Grid container spacing={3} sx={{ mb: 4 }}>
+      {[1, 2].map((item) => (
+        <Grid item xs={12} sm={6} md={6} key={item}>
+          <StatsCardSkeleton />
+        </Grid>
+      ))}
+    </Grid>
 
-    // Calculate total value
-    if (contract.amount && typeof contract.amount === "number") {
-      stats.totalValue += contract.amount;
-    }
+    {/* Chips skeleton */}
+    <Box sx={{ mb: 4, display: "flex", gap: 2, flexWrap: "wrap" }}>
+      <Skeleton variant="text" width={150} height={24} />
+      {[1, 2, 3, 4].map((item) => (
+        <Skeleton key={item} variant="rounded" width={120} height={32} />
+      ))}
+    </Box>
 
-    // Count active contracts (not ended and not cancelled)
-    const endDate = new Date(contract.endDate);
-    if (contract.status !== "Cancelado" && endDate >= currentDate) {
-      stats.activeContracts++;
-    }
-
-    // Count unique suppliers
-    if (contract.supplierId) {
-      stats.uniqueSuppliers.add(contract.supplierId);
-    }
-  });
-
-  return {
-    ...stats,
-    uniqueSuppliersCount: stats.uniqueSuppliers.size,
-  };
-};
+    {/* Table skeleton */}
+    <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+      <CircularProgress />
+    </Box>
+  </Box>
+);
 
 const Page: React.FC = () => {
-  const [contracts, setContracts] = useState<Contract[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: contracts = [], isLoading, isError, error } = useContracts();
 
-  useEffect(() => {
-    const fetchContracts = async () => {
-      try {
-        setLoading(true);
-        const q = query(
-          collection(db, "contracts"),
-          orderBy("createdAt", "desc")
-        );
-        const data = await getDocs(q);
-        const contractsList: Contract[] = [];
-
-        data.forEach((contract) => {
-          contractsList.push({
-            ...contract.data(),
-            id: contract.id,
-          } as Contract);
-        });
-
-        setContracts(contractsList);
-      } catch (err) {
-        console.error("Error fetching contracts:", err);
-        setError("Erro ao carregar contratos. Tente novamente.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchContracts();
-  }, []);
-
-  // Get contract stats
-  const stats = getContractStats(contracts);
-
-  // Format currency
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-AO", {
-      style: "currency",
-      currency: "AOA",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  // Get contract stats only when data is available
+  const stats =
+    contracts.length > 0
+      ? getContractStats(contracts)
+      : {
+          total: 0,
+          emAndamento: 0,
+          concluido: 0,
+          cancelado: 0,
+          totalValue: 0,
+          activeContracts: 0,
+          uniqueSuppliersCount: 0,
+        };
 
   // Loading state
-  if (loading) {
-    return (
-      <Box sx={{ maxWidth: "1400px", margin: "0 auto", p: 2 }}>
-        {/* Breadcrumbs skeleton */}
-        <Skeleton variant="text" width={300} height={32} sx={{ mb: 3 }} />
-
-        {/* Header skeleton */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 3,
-          }}
-        >
-          <Skeleton variant="text" width={200} height={48} />
-          <Skeleton variant="rectangular" width={150} height={40} />
-        </Box>
-
-        {/* Dashboard cards skeleton */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          {[1, 2, 3, 4].map((item) => (
-            <Grid item xs={12} sm={6} md={3} key={item}>
-              <Card elevation={2} sx={{ borderRadius: 2, height: "100%" }}>
-                <CardContent sx={{ textAlign: "center", p: 2 }}>
-                  <Skeleton
-                    variant="circular"
-                    width={40}
-                    height={40}
-                    sx={{ mx: "auto", mb: 1 }}
-                  />
-                  <Skeleton
-                    variant="text"
-                    width={60}
-                    height={32}
-                    sx={{ mx: "auto" }}
-                  />
-                  <Skeleton
-                    variant="text"
-                    width={120}
-                    height={20}
-                    sx={{ mx: "auto" }}
-                  />
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Additional stats skeleton */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          {[1, 2].map((item) => (
-            <Grid item xs={12} sm={6} md={6} key={item}>
-              <Card elevation={2} sx={{ borderRadius: 2, height: "100%" }}>
-                <CardContent sx={{ textAlign: "center", p: 2 }}>
-                  <Skeleton
-                    variant="circular"
-                    width={40}
-                    height={40}
-                    sx={{ mx: "auto", mb: 1 }}
-                  />
-                  <Skeleton
-                    variant="text"
-                    width={100}
-                    height={32}
-                    sx={{ mx: "auto" }}
-                  />
-                  <Skeleton
-                    variant="text"
-                    width={150}
-                    height={20}
-                    sx={{ mx: "auto" }}
-                  />
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Chips skeleton */}
-        <Box sx={{ mb: 4, display: "flex", gap: 2, flexWrap: "wrap" }}>
-          <Skeleton variant="text" width={150} height={24} />
-          {[1, 2, 3, 4].map((item) => (
-            <Skeleton key={item} variant="rounded" width={120} height={32} />
-          ))}
-        </Box>
-
-        {/* Table skeleton */}
-        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-          <CircularProgress />
-        </Box>
-      </Box>
-    );
+  if (isLoading) {
+    return <LoadingState />;
   }
 
   // Error state
-  if (error) {
+  if (isError) {
     return (
       <Box sx={{ maxWidth: "1400px", margin: "0 auto", p: 2 }}>
         <Alert
@@ -240,11 +127,10 @@ const Page: React.FC = () => {
           sx={{ borderRadius: 2, mb: 3 }}
         >
           <Typography variant="h6">Erro ao carregar contratos</Typography>
-          <Typography variant="body2">{error}</Typography>
+          <Typography variant="body2">
+            {error?.message || "Erro desconhecido"}
+          </Typography>
         </Alert>
-        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-          <CircularProgress />
-        </Box>
       </Box>
     );
   }

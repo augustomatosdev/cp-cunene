@@ -13,6 +13,10 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import BlockIcon from "@mui/icons-material/Block";
 import CheckIcon from "@mui/icons-material/Check";
+import { deleteDoc, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { toast } from "react-toastify";
+import { useQueryClient } from "@tanstack/react-query";
 
 type User = {
   id: string;
@@ -26,6 +30,7 @@ type User = {
 //nested data is ok, see accessorKeys in ColumnDef below
 const UsersTable = ({ data }: { data: User[] }) => {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const columns = useMemo<MRT_ColumnDef<User>[]>(
     () => [
@@ -94,42 +99,46 @@ const UsersTable = ({ data }: { data: User[] }) => {
       },
     },
     renderRowActionMenuItems: ({ row }) => [
-      <MenuItem
-        key="view"
-        onClick={() => router.push(`/users/${row.original.id}/view`)}
-      >
-        <ListItemIcon>
-          <VisibilityIcon fontSize="small" />
-        </ListItemIcon>
-        <ListItemText>Visualizar usuário</ListItemText>
-      </MenuItem>,
-      <MenuItem
-        key="edit"
-        onClick={() => router.push(`/users/${row.original.id}/edit`)}
-      >
-        <ListItemIcon>
-          <EditIcon fontSize="small" />
-        </ListItemIcon>
-        <ListItemText>Editar usuário</ListItemText>
-      </MenuItem>,
-      <MenuItem
-        key="toggle-status"
-        onClick={() => console.info("Toggle status for user:", row.original.id)}
-      >
-        <ListItemIcon>
-          {row.original.isActive ? (
-            <BlockIcon fontSize="small" />
-          ) : (
-            <CheckIcon fontSize="small" />
-          )}
-        </ListItemIcon>
-        <ListItemText>
-          {row.original.isActive ? "Desativar usuário" : "Ativar usuário"}
-        </ListItemText>
-      </MenuItem>,
+      // <MenuItem
+      //   key="view"
+      //   onClick={() => router.push(`/users/${row.original.id}/view`)}
+      // >
+      //   <ListItemIcon>
+      //     <VisibilityIcon fontSize="small" />
+      //   </ListItemIcon>
+      //   <ListItemText>Visualizar usuário</ListItemText>
+      // </MenuItem>,
+      // <MenuItem
+      //   key="edit"
+      //   onClick={() => router.push(`/users/${row.original.id}/edit`)}
+      // >
+      //   <ListItemIcon>
+      //     <EditIcon fontSize="small" />
+      //   </ListItemIcon>
+      //   <ListItemText>Editar usuário</ListItemText>
+      // </MenuItem>,
+      // <MenuItem
+      //   key="toggle-status"
+      //   onClick={() => console.info("Toggle status for user:", row.original.id)}
+      // >
+      //   <ListItemIcon>
+      //     {row.original.isActive ? (
+      //       <BlockIcon fontSize="small" />
+      //     ) : (
+      //       <CheckIcon fontSize="small" />
+      //     )}
+      //   </ListItemIcon>
+      //   <ListItemText>
+      //     {row.original.isActive ? "Desativar usuário" : "Ativar usuário"}
+      //   </ListItemText>
+      // </MenuItem>,
       <MenuItem
         key="delete"
-        onClick={() => console.info("Delete user:", row.original.id)}
+        onClick={async () => {
+          await deleteDoc(doc(db, "users", row.original.id));
+          toast.success("Utilizador eliminado com sucesso");
+          queryClient.invalidateQueries({ queryKey: ["users"] });
+        }}
       >
         <ListItemIcon>
           <DeleteIcon fontSize="small" />

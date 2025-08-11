@@ -87,8 +87,6 @@ export const UserForm: React.FC = () => {
         isActive: true,
       };
 
-      console.log({ userData });
-
       await createUserWithEmailAndPassword(
         auth,
         userData.email,

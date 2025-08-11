@@ -1,13 +1,5 @@
+"use client";
 import React from "react";
-import {
-  collection,
-  getDocs,
-  orderBy,
-  query,
-  where,
-  Timestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import {
   Box,
   Typography,
@@ -16,6 +8,8 @@ import {
   Grid,
   Card,
   CardContent,
+  Skeleton,
+  Alert,
 } from "@mui/material";
 import HomeIcon from "@mui/icons-material/Home";
 import BusinessIcon from "@mui/icons-material/Business";
@@ -26,48 +20,56 @@ import PauseCircleFilledIcon from "@mui/icons-material/PauseCircleFilled";
 import CancelIcon from "@mui/icons-material/Cancel";
 import SuppliersTable from "./suppliers-tablet";
 import AddSupplier from "./add-supplier";
+import { useSuppliers, getSupplierStats } from "@/hooks/useSuppliers";
 
-// Utility to get supplier stats
-const getSupplierStats = (suppliers: any[]) => {
-  const stats = {
-    total: suppliers.length,
-    active: 0,
-    inactive: 0,
-    suspended: 0,
-    services: 0,
-    products: 0,
-  };
+// Loading skeleton for stats cards
+const StatsCardSkeleton = () => (
+  <Card
+    elevation={2}
+    sx={{
+      borderRadius: 2,
+      height: "100%",
+    }}
+  >
+    <CardContent sx={{ textAlign: "center", p: 2 }}>
+      <Skeleton
+        variant="circular"
+        width={40}
+        height={40}
+        sx={{ mx: "auto", mb: 1 }}
+      />
+      <Skeleton variant="text" width={60} height={40} sx={{ mx: "auto" }} />
+      <Skeleton variant="text" width="80%" height={20} sx={{ mx: "auto" }} />
+    </CardContent>
+  </Card>
+);
 
-  suppliers.forEach((supplier: any) => {
-    // Count by status
-    if (supplier.status === "Activo") stats.active++;
-    else if (supplier.status === "Inactivo") stats.inactive++;
-    else if (supplier.status === "Suspenso") stats.suspended++;
+const Page = () => {
+  const { data: suppliers = [], isLoading, isError, error } = useSuppliers();
 
-    // Count by type
-    if (supplier.tipo === "Serviço") stats.services++;
-    else if (supplier.tipo === "Produto") stats.products++;
-  });
+  // Get suppliers stats only when data is available
+  const stats =
+    suppliers.length > 0
+      ? getSupplierStats(suppliers)
+      : {
+          total: 0,
+          active: 0,
+          inactive: 0,
+          suspended: 0,
+          services: 0,
+          products: 0,
+        };
 
-  return stats;
-};
-
-const Page = async () => {
-  // Fetch suppliers with improved error handling
-  const suppliers: any[] = [];
-  try {
-    const q = query(collection(db, "suppliers"), orderBy("createdAt", "desc"));
-    const data = await getDocs(q);
-    data.forEach((supplier) => {
-      suppliers.push({ ...supplier.data(), id: supplier.id });
-    });
-  } catch (error) {
-    console.error("Error fetching suppliers:", error);
-    // In production, you might want to handle this error more gracefully
+  // Error state
+  if (isError) {
+    return (
+      <Box sx={{ maxWidth: "1400px", margin: "0 auto", p: 2 }}>
+        <Alert severity="error" sx={{ mb: 3 }}>
+          Erro ao carregar fornecedores: {error?.message || "Erro desconhecido"}
+        </Alert>
+      </Box>
+    );
   }
-
-  // Get suppliers stats
-  const stats = getSupplierStats(suppliers);
 
   return (
     <Box sx={{ maxWidth: "1400px", margin: "0 auto", p: 2 }}>
@@ -137,106 +139,122 @@ const Page = async () => {
       {/* Dashboard Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <Card
-            elevation={2}
-            sx={{
-              borderRadius: 2,
-              height: "100%",
-              transition: "transform 0.3s, box-shadow 0.3s",
-              "&:hover": {
-                transform: "translateY(-4px)",
-                boxShadow: 4,
-              },
-            }}
-          >
-            <CardContent sx={{ textAlign: "center", p: 2 }}>
-              <BusinessIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h4" color="text.primary" fontWeight="bold">
-                {stats.total}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Total de Fornecedores
-              </Typography>
-            </CardContent>
-          </Card>
+          {isLoading ? (
+            <StatsCardSkeleton />
+          ) : (
+            <Card
+              elevation={2}
+              sx={{
+                borderRadius: 2,
+                height: "100%",
+                transition: "transform 0.3s, box-shadow 0.3s",
+                "&:hover": {
+                  transform: "translateY(-4px)",
+                  boxShadow: 4,
+                },
+              }}
+            >
+              <CardContent sx={{ textAlign: "center", p: 2 }}>
+                <BusinessIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
+                <Typography variant="h4" color="text.primary" fontWeight="bold">
+                  {stats.total}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total de Fornecedores
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card
-            elevation={2}
-            sx={{
-              borderRadius: 2,
-              height: "100%",
-              transition: "transform 0.3s, box-shadow 0.3s",
-              "&:hover": {
-                transform: "translateY(-4px)",
-                boxShadow: 4,
-              },
-            }}
-          >
-            <CardContent sx={{ textAlign: "center", p: 2 }}>
-              <CheckCircleIcon color="success" sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h4" color="success.main" fontWeight="bold">
-                {stats.active}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Fornecedores Activos
-              </Typography>
-            </CardContent>
-          </Card>
+          {isLoading ? (
+            <StatsCardSkeleton />
+          ) : (
+            <Card
+              elevation={2}
+              sx={{
+                borderRadius: 2,
+                height: "100%",
+                transition: "transform 0.3s, box-shadow 0.3s",
+                "&:hover": {
+                  transform: "translateY(-4px)",
+                  boxShadow: 4,
+                },
+              }}
+            >
+              <CardContent sx={{ textAlign: "center", p: 2 }}>
+                <CheckCircleIcon color="success" sx={{ fontSize: 40, mb: 1 }} />
+                <Typography variant="h4" color="success.main" fontWeight="bold">
+                  {stats.active}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Fornecedores Activos
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card
-            elevation={2}
-            sx={{
-              borderRadius: 2,
-              height: "100%",
-              transition: "transform 0.3s, box-shadow 0.3s",
-              "&:hover": {
-                transform: "translateY(-4px)",
-                boxShadow: 4,
-              },
-            }}
-          >
-            <CardContent sx={{ textAlign: "center", p: 2 }}>
-              <PauseCircleFilledIcon
-                color="warning"
-                sx={{ fontSize: 40, mb: 1 }}
-              />
-              <Typography variant="h4" color="warning.main" fontWeight="bold">
-                {stats.suspended}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Fornecedores Suspensos
-              </Typography>
-            </CardContent>
-          </Card>
+          {isLoading ? (
+            <StatsCardSkeleton />
+          ) : (
+            <Card
+              elevation={2}
+              sx={{
+                borderRadius: 2,
+                height: "100%",
+                transition: "transform 0.3s, box-shadow 0.3s",
+                "&:hover": {
+                  transform: "translateY(-4px)",
+                  boxShadow: 4,
+                },
+              }}
+            >
+              <CardContent sx={{ textAlign: "center", p: 2 }}>
+                <PauseCircleFilledIcon
+                  color="warning"
+                  sx={{ fontSize: 40, mb: 1 }}
+                />
+                <Typography variant="h4" color="warning.main" fontWeight="bold">
+                  {stats.suspended}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Fornecedores Suspensos
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card
-            elevation={2}
-            sx={{
-              borderRadius: 2,
-              height: "100%",
-              transition: "transform 0.3s, box-shadow 0.3s",
-              "&:hover": {
-                transform: "translateY(-4px)",
-                boxShadow: 4,
-              },
-            }}
-          >
-            <CardContent sx={{ textAlign: "center", p: 2 }}>
-              <CancelIcon color="error" sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h4" color="error.main" fontWeight="bold">
-                {stats.inactive}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Fornecedores Inactivos
-              </Typography>
-            </CardContent>
-          </Card>
+          {isLoading ? (
+            <StatsCardSkeleton />
+          ) : (
+            <Card
+              elevation={2}
+              sx={{
+                borderRadius: 2,
+                height: "100%",
+                transition: "transform 0.3s, box-shadow 0.3s",
+                "&:hover": {
+                  transform: "translateY(-4px)",
+                  boxShadow: 4,
+                },
+              }}
+            >
+              <CardContent sx={{ textAlign: "center", p: 2 }}>
+                <CancelIcon color="error" sx={{ fontSize: 40, mb: 1 }} />
+                <Typography variant="h4" color="error.main" fontWeight="bold">
+                  {stats.inactive}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Fornecedores Inactivos
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
         </Grid>
       </Grid>
 
@@ -254,23 +272,48 @@ const Page = async () => {
           Distribuição por tipo:
         </Typography>
 
-        <Chip
-          icon={<DescriptionIcon />}
-          label={`Serviços: ${stats.services}`}
-          color="primary"
-          variant="outlined"
-        />
+        {isLoading ? (
+          <>
+            <Skeleton
+              variant="rectangular"
+              width={120}
+              height={32}
+              sx={{ borderRadius: 2 }}
+            />
+            <Skeleton
+              variant="rectangular"
+              width={120}
+              height={32}
+              sx={{ borderRadius: 2 }}
+            />
+          </>
+        ) : (
+          <>
+            <Chip
+              icon={<DescriptionIcon />}
+              label={`Serviços: ${stats.services}`}
+              color="primary"
+              variant="outlined"
+            />
 
-        <Chip
-          icon={<BusinessIcon />}
-          label={`Produtos: ${stats.products}`}
-          color="secondary"
-          variant="outlined"
-        />
+            <Chip
+              icon={<BusinessIcon />}
+              label={`Produtos: ${stats.products}`}
+              color="secondary"
+              variant="outlined"
+            />
+          </>
+        )}
       </Box>
 
       {/* Table */}
-      <SuppliersTable data={suppliers} />
+      {isLoading ? (
+        <Box sx={{ mt: 4 }}>
+          <Skeleton variant="rectangular" width="100%" height={400} />
+        </Box>
+      ) : (
+        <SuppliersTable data={suppliers as any} />
+      )}
     </Box>
   );
 };
